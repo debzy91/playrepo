@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DEPENDENT_BRANCH: feature-to-dep-test-1     # <-- change this to the branch that must be merged first
-      TARGET_BRANCH: dev          # <-- change this to the base branch (where dependency must be merged into)
+      TARGET_BRANCH: deployment-test          # <-- change this to the base branch (where dependency must be merged into)
       CHECK_NAME: "test-dependency" # displayed in PR checks; update as wanted
     steps:
       - name: Set up repo
