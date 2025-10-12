@@ -1,0 +1,75 @@
+name: Dependency check (neutral waiting)
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    # runs on PRs targeting any branch; further checks below ensure target branch match if needed
+
+permissions:
+  # needed to create check runs
+  checks: write
+  contents: read
+
+jobs:
+  check-dependency:
+    runs-on: ubuntu-latest
+    env:
+      DEPENDENT_BRANCH: feature-to-dep-test-1     # <-- change this to the branch that must be merged first
+      TARGET_BRANCH: dev          # <-- change this to the base branch (where dependency must be merged into)
+      CHECK_NAME: "test-dependency" # displayed in PR checks; update as wanted
+    steps:
+      - name: Set up repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch remote branches
+        run: |
+          git fetch origin $DEPENDENT_BRANCH || true
+          git fetch origin $TARGET_BRANCH || true
+
+      - name: Detect if dependency merged into target
+        id: detect
+        run: |
+          # The commit SHA of the PR head
+          SHA="${{ github.event.pull_request.head.sha }}"
+          echo "PR head SHA: $SHA"
+          if git merge-base --is-ancestor origin/${DEPENDENT_BRANCH} origin/${TARGET_BRANCH}; then
+            echo "merged=true" >> $GITHUB_OUTPUT
+          else
+            echo "merged=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create check run (success or neutral)
+        id: create_check
+        run: |
+          REPO="${{ github.repository }}"
+          SHA="${{ github.event.pull_request.head.sha }}"
+          API="https://api.github.com/repos/${REPO}/check-runs"
+          NAME="${CHECK_NAME}"
+          if [ "${{ steps.detect.outputs.merged }}" = "true" ]; then
+            SUMMARY="✅ ${DEPENDENT_BRANCH} is merged into ${TARGET_BRANCH}."
+            CONCLUSION="success"
+            TITLE="Dependency satisfied"
+          else
+            SUMMARY="⏳ Waiting: ${DEPENDENT_BRANCH} is not yet merged into ${TARGET_BRANCH}."
+            CONCLUSION="neutral"
+            TITLE="Waiting for dependency"
+          fi
+
+          # Create a completed check-run with the given conclusion.
+          # GITHUB_TOKEN has checks: write permission set above in 'permissions'
+          curl -s -X POST "${API}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -d "{
+              \"name\": \"${NAME}\",
+              \"head_sha\": \"${SHA}\",
+              \"status\": \"completed\",
+              \"conclusion\": \"${CONCLUSION}\",
+              \"output\": {
+                \"title\": \"${TITLE}\",
+                \"summary\": \"${SUMMARY}\"
+              }
+            }" \
+            | jq '.' || true
