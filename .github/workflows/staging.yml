@@ -1,4 +1,4 @@
-name: Dependency check (neutral waiting)
+name: Dependency check Staging (neutral waiting)
 
 on:
   pull_request:
