@@ -3,9 +3,7 @@ name: Dependency check (neutral waiting)
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
-    branches:
-      - staging
-
+   
 permissions:
   checks: write
   contents: read
