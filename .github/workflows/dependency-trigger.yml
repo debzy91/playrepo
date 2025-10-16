@@ -1,0 +1,41 @@
+name: Trigger Dependency Check on Merge
+
+on:
+  push:
+    branches:
+      - deployment-test   # <-- This is the branch into which your dependency is merged
+
+permissions:
+  checks: write
+  pull-requests: read
+  contents: read
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find open PRs that depend on this branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Searching for open PRs that might depend on this branch..."
+          prs=$(gh pr list --state open --json number,headRefName,baseRefName)
+
+          echo "$prs" | jq -c '.[]' | while read -r pr; do
+            number=$(echo "$pr" | jq -r '.number')
+            base=$(echo "$pr" | jq -r '.baseRefName')
+            head=$(echo "$pr" | jq -r '.headRefName')
+
+            echo "Checking PR #$number ($head -> $base)..."
+
+            # You can customize this condition to match your dependency pattern
+            if [[ "$head" == feature-to-dev-2* && "$base" == "dev" ]]; then
+              echo "Re-triggering workflow for PR #$number..."
+              gh workflow run "Dependency check (neutral waiting)" --ref "$head" || true
+            fi
+          done
