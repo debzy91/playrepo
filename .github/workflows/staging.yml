@@ -9,6 +9,7 @@ on:
 permissions:
   checks: write
   contents: read
+  pull-requests: read
 
 jobs:
   check-dependency:
@@ -23,19 +24,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch remote branches
+      - name: Check via GitHub API if dependent PR is merged
+        id: check_pr
         run: |
-          git fetch origin $DEPENDENT_BRANCH || true
-          git fetch origin $TARGET_BRANCH || true
+          echo "🔍 Checking if ${DEPENDENT_BRANCH} has been merged into ${TARGET_BRANCH}..."
 
-      - name: Detect if feature branch merged into dev
-        id: detect
-        run: |
-          SHA="${{ github.event.pull_request.head.sha }}"
-          echo "PR head SHA: $SHA"
-          if git merge-base --is-ancestor origin/${DEPENDENT_BRANCH} origin/${TARGET_BRANCH}; then
+          OWNER="${{ github.repository_owner }}"
+          REPO="$(basename ${{ github.repository }})"
+
+          # Get PRs from feature-to-dev-2 → dev that are closed
+          response=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${OWNER}/${REPO}/pulls?base=${TARGET_BRANCH}&head=${OWNER}:${DEPENDENT_BRANCH}&state=closed")
+
+          merged=$(echo "$response" | jq '.[0].merged // false')
+
+          if [ "$merged" = "true" ]; then
+            echo "✅ ${DEPENDENT_BRANCH} has been merged into ${TARGET_BRANCH}."
             echo "merged=true" >> $GITHUB_OUTPUT
           else
+            echo "⏳ ${DEPENDENT_BRANCH} not yet merged into ${TARGET_BRANCH}."
             echo "merged=false" >> $GITHUB_OUTPUT
           fi
 
@@ -46,7 +53,7 @@ jobs:
           API="https://api.github.com/repos/${REPO}/check-runs"
           NAME="${CHECK_NAME}"
 
-          if [ "${{ steps.detect.outputs.merged }}" = "true" ]; then
+          if [ "${{ steps.check_pr.outputs.merged }}" = "true" ]; then
             SUMMARY="✅ ${DEPENDENT_BRANCH} has been merged into ${TARGET_BRANCH}. Staging is unblocked."
             CONCLUSION="success"
             TITLE="Dependency satisfied"
@@ -55,6 +62,8 @@ jobs:
             CONCLUSION="neutral"
             TITLE="Waiting for dependency"
           fi
+
+          echo "📤 Creating check run: $CONCLUSION"
 
           curl -s -X POST "${API}" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
