@@ -1,4 +1,4 @@
-name: Dependency check Staging (neutral waiting)
+name: Dependency check (neutral waiting)
 
 on:
   pull_request:
@@ -15,24 +15,19 @@ jobs:
   check-dependency:
     runs-on: ubuntu-latest
     env:
-      DEPENDENT_BRANCH: feature-to-dev-2   # The feature branch that must be merged first
-      TARGET_BRANCH: dev                   # The branch it should be merged into before unblocking staging
-      CHECK_NAME: "test-dependency-dev"
+      DEPENDENT_BRANCH: feature-to-dev-2
+      TARGET_BRANCH: dev
+      CHECK_NAME: "test-dependency"
     steps:
-      - name: Set up repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check via GitHub API if dependent PR is merged
-        id: check_pr
+      - name: Check if dependency PR is merged
+        id: detect
         run: |
           echo "🔍 Checking if ${DEPENDENT_BRANCH} has been merged into ${TARGET_BRANCH}..."
 
           OWNER="${{ github.repository_owner }}"
           REPO="$(basename ${{ github.repository }})"
 
-          # Get PRs from feature-to-dev-2 → dev that are closed
+          # Get the closed PR (feature-to-dev-2 -> dev)
           response=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${OWNER}/${REPO}/pulls?base=${TARGET_BRANCH}&head=${OWNER}:${DEPENDENT_BRANCH}&state=closed")
 
@@ -53,8 +48,8 @@ jobs:
           API="https://api.github.com/repos/${REPO}/check-runs"
           NAME="${CHECK_NAME}"
 
-          if [ "${{ steps.check_pr.outputs.merged }}" = "true" ]; then
-            SUMMARY="✅ ${DEPENDENT_BRANCH} has been merged into ${TARGET_BRANCH}. Staging is unblocked."
+          if [ "${{ steps.detect.outputs.merged }}" = "true" ]; then
+            SUMMARY="✅ ${DEPENDENT_BRANCH} has been merged into ${TARGET_BRANCH}. Unblocked."
             CONCLUSION="success"
             TITLE="Dependency satisfied"
           else
@@ -63,7 +58,7 @@ jobs:
             TITLE="Waiting for dependency"
           fi
 
-          echo "📤 Creating check run: $CONCLUSION"
+          echo "📤 Creating check run with conclusion: $CONCLUSION"
 
           curl -s -X POST "${API}" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
