@@ -14,8 +14,8 @@ jobs:
   check-dependency:
     runs-on: ubuntu-latest
     env:
-      DEPENDENT_BRANCH: feature-to-dev-2     # <-- change this to the branch that must be merged first
-      TARGET_BRANCH: dev         # <-- change this to the base branch (where dependency must be merged into)
+      DEPENDENT_BRANCH: dev   # <-- change this to the branch that must be merged first
+      TARGET_BRANCH: staging         # <-- change this to the base branch (where dependency must be merged into)
       CHECK_NAME: "test-dependency-dev" # displayed in PR checks; update as wanted
     steps:
       - name: Set up repo
